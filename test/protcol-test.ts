@@ -2,8 +2,8 @@ import { numberToBuff, buffToNumber } from "../src/protocol";
 
 test('NumberTransform', () => {
     let num = 0xABCD12
-    let buffer = Buffer.alloc(8)
-    let targetBuffer = Buffer.alloc(8)
+    let buffer = Buffer.alloc(8, 0)
+    let targetBuffer = Buffer.alloc(8, 0)
     targetBuffer[7] = 0x12
     targetBuffer[6] = 0xCD
     targetBuffer[5] = 0xAB

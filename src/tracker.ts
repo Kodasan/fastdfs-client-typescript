@@ -1,7 +1,8 @@
 import { FastDfsConnection } from "./io";
-import { StorageServer, StorageServerStat } from "./storage";
-import { TrackerCmd, ProtocolConstants, packHeader, recvHeader, Header, buffToNumber, FastDfsError, Task } from "./protocol";
+import { StorageServer } from "./storage";
+import { TrackerCmd, ProtocolConstants, packHeader, recvHeader, Header, buffToNumber, FastDfsError, Task, StorageGroupStat, StorageServerStat } from "./protocol";
 import { AbstractCommandQuque } from "./core";
+import { parseStorageGroupStat, parseStorageServerStat } from "./parser";
 
 export class TrackerClient extends AbstractCommandQuque {
 
@@ -121,8 +122,75 @@ export class TrackerClient extends AbstractCommandQuque {
 
 
 
-    public listStorageServerStat(groupName: string, ipAddr: string[], cb: (err:Error, stat: StorageServerStat[]) => void) {
-    
+    public listStorageStat(groupName: string, storageIpAddr: string): Promise<StorageServerStat[]> {
+        return new Promise<StorageServerStat[]>((resolve, reject) => {
+            this.submit({
+                request: () => {
+                    let len = 0
+                    let groupNameBytes = Buffer.alloc(ProtocolConstants.GROUP_NAME_MAX_BYTES, 0)
+                    groupNameBytes.write(groupName, 'utf-8')
+                    len += ProtocolConstants.GROUP_NAME_MAX_BYTES
+                    let ipBytes: Buffer = null
+                    if (storageIpAddr != null) {
+                        ipBytes = Buffer.from(storageIpAddr)
+                        len += ipBytes.length
+                    }
+                    let header = packHeader(len, 0, TrackerCmd.LIST_STORAGE)
+                    let pkg = Buffer.concat([header, groupNameBytes])
+                    this.connection.write(pkg)
+                    if (ipBytes != null) {
+                        this.connection.write(ipBytes)
+                    }
+                },  
+                response: (err, header, data) => {
+                    if (err) {
+                        reject(err)
+                        return
+                    }
+                    if (header.status != 0) {
+                        reject(new Error(`Error code is${header.status}`))
+                        return
+                    }
+                    let pos = 0
+                    let stats: StorageServerStat[] = []
+                    while (pos < data.length) {
+                        let [stat, newPos] = parseStorageServerStat(data, pos, 'utf-8')
+                        stats.push(stat)
+                        pos = newPos
+                    }
+                    resolve(stats)
+                }
+            })
+        })
+    }
+
+    public listGroupsStat(): Promise<StorageGroupStat[]> {
+        return new Promise<StorageGroupStat[]>((resolve, reject) => {
+            this.submit({
+                request: () => {
+                    let header = packHeader(0, 0, TrackerCmd.LIST_GROUP)
+                    this.connection.write(header)
+                },
+                response: (err, header, data) => {
+                    if (err) {
+                        reject(err)
+                        return
+                    }
+                    if (header.status != 0) {
+                        reject(new Error(`Error code is${header.status}`))
+                        return
+                    }
+                    let pos = 0
+                    let stats: StorageGroupStat[] = []
+                    while (pos < data.length) {
+                        let [stat, newPos] = parseStorageGroupStat(data, pos, 'utf-8')
+                        stats.push(stat)
+                        pos = newPos
+                    }
+                    resolve(stats)
+                }
+            })
+        })
     }
 
 

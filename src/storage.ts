@@ -10,27 +10,6 @@ export interface StorageServer {
     groupName?: string
 }
 
-export class StorageServerStat {
-    public status:number
-    public id:string
-    public ipAddr:string
-    public srcIpAddr:string
-    public domainName:string
-    public version:string
-    public totalMB:number
-    public freeMB:number
-    public uploadPriority:number
-    public joinTime:Date
-    public upTime:Date
-    public storePathCount:number
-    public subdirCountPerPath:number
-    public storagePort:number
-    public storageHttpPort:number
-    public currentWritePath:number
-    public connectionAllocCount:number
-    public connectionCurrentCount:number
-}
-
 export interface NamveValuePair {
     name: string,
     value: string
