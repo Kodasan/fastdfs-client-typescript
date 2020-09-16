@@ -1,4 +1,8 @@
-import { replaceEndStr, ProtocolConstants, StorageGroupStat, StorageServerStat } from "./protocol"
+import { ProtocolConstants }    from "./constants"
+import { StorageGroupStat }     from "./storage_group_stat"
+import { StorageServerStat }    from "./storage_server_stat"
+import { replaceEndStr }        from "./util"
+
 
 export enum FastDfsTypes {
     LONG,

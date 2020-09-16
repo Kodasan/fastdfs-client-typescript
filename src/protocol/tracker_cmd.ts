@@ -1,0 +1,12 @@
+/**
+ * tracker command
+ */
+export enum TrackerCmd {
+    LIST_GROUP = 91,
+    LIST_STORAGE = 92,
+    QUERY_STORE_WITH_GROUP_ALL = 107,
+    QUERY_STORE_WITH_GROUP_ONE = 104,
+    QUERY_STORE_WITHOUT_GROUP_ONE = 101,
+    QUERY_FETCH_ONE = 102,
+    QUERY_FETCH_ALL = 105
+}
