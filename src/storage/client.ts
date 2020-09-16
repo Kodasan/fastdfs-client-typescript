@@ -15,6 +15,7 @@ import { UploadStream }      from "./upload_stream"
 import { Readable }          from "stream"
 import { StreamRedirector }  from "../io/handlers/stream_redirector"
 import { DownloadTask }      from "./download_task"
+import { ReadableFile } from "./readabl_file"
 
 /**
  * @description storage client of fastdfs
@@ -102,7 +103,7 @@ export class StorageClient extends TaskQueue {
     }
 
     public downloadToStream(task: DownloadTask): Readable {
-        let   readable            = new Readable()
+        let   readable            = new ReadableFile()
         const removeAfterJobDone  = true
         this._submit({
             request: () => {

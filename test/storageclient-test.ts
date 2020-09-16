@@ -1,3 +1,4 @@
+import * as fs from "fs"
 /**
  * storage client test
  */
@@ -15,7 +16,7 @@ let storageServer = {
 }
 
 
-const file   = '/root/text.jpg'
+const file = '/root/text.jpg'
 
 test('upload an file',  async () => {
     const client = new StorageClient(connOpts, storageServer)
@@ -24,3 +25,40 @@ test('upload an file',  async () => {
     client.close()
 })
 
+const fastdfsFile = 'M00/00/00/rBLkSl9iFB-AE1gFAAAn1mYFCok16_big.conf'
+const groupName = 'group1'
+
+test('download an file to buffer', async () => {
+    const client = new StorageClient(connOpts, storageServer)
+    const res = await client.download({
+        filename: fastdfsFile,
+        groupName,
+        fileOffset: 0,
+        byteAmount: 256
+    })
+    expect(res).not.toBeNull()
+    expect(res.length).toEqual(256)
+    client.close()
+})
+
+
+
+test('StreamRedirector test',  done => {
+    const savePath = '/root/target'
+    const client = new StorageClient(connOpts, storageServer)
+    client.downloadToStream({
+        filename: fastdfsFile,
+        groupName,
+        fileOffset: 0,
+        byteAmount: 512
+    })
+    .pipe(fs.createWriteStream(savePath))
+    .on('close', () => {
+        fs.stat(savePath, (err, stat) => {
+            expect(err).toBeNull()
+            expect(stat.size).toBe(512)
+            done()
+        })
+        client.close()
+    })
+})

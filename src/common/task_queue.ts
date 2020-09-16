@@ -42,7 +42,7 @@ export abstract class TaskQueue {
     }
 
     protected _response(error:Error, header?: Header, data?: Buffer): this {
-        if (this.execute != null) {
+        if (this.execute != null && this.execute.response != null) {
             this.execute.response(error, header, data)
         }
         // if decide to reject all task, we cannot invoke netxt task
