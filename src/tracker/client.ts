@@ -111,7 +111,7 @@ export class TrackerClient extends TaskQueue {
         })
     }
 
-    public listStorageStat(groupName: string, storageIpAddr: string): Promise<StorageServerStat[]> {
+    public listStorageStat(groupName: string, storageIpAddr?: string): Promise<StorageServerStat[]> {
         return new Promise<StorageServerStat[]>((resolve, reject) => {
             this._submit({
                 request: () => {

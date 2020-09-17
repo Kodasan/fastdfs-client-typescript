@@ -29,7 +29,7 @@ export function parseGroupName(data: Buffer, offset: number, charset: BufferEnco
 }
 
 export function parseStorageId(data: Buffer, offset: number) {
-    return data.toString('utf-8', offset, offset + ProtocolConstants.STORAGE_ID_MAX_SIZE)
+    return replaceEndStr(data.toString('utf-8', offset, offset + ProtocolConstants.STORAGE_ID_MAX_SIZE))
 }
 
 
@@ -40,16 +40,16 @@ export function parseFields<T>(fields: Array<Field>, data: Buffer, offset: numbe
         switch(field.type) {
             case FastDfsTypes.GROUP_NAME : {
                 attr[field.property] = parseGroupName(data, pos, charset ? charset : 'utf-8')
-                pos = pos + ProtocolConstants.GROUP_NAME_MAX_BYTES
+                pos = pos + ProtocolConstants.GROUP_NAME_MAX_BYTES + 1
                 break
             }
             case FastDfsTypes.LONG : {
-                attr[field.property] = data.readBigInt64BE(pos)
+                attr[field.property] = data.readBigUInt64BE(pos)
                 pos = pos + ProtocolConstants.LENGTH_BYTES
                 break
             }
             case FastDfsTypes.INT: {
-                attr[field.property] = data.readInt32BE(pos + 4)
+                attr[field.property] = data.readUInt32BE(pos + 4)
                 pos = pos + ProtocolConstants.LENGTH_BYTES
                 break
             }
@@ -84,18 +84,18 @@ export function parseFields<T>(fields: Array<Field>, data: Buffer, offset: numbe
             }
             case FastDfsTypes.DATE : {
                 // FastDFS返回的数据以秒为单位
-                let timestamp = data.readBigInt64BE(pos)
-                attr[field.property] = new Date(Number(timestamp))
+                let timestamp = data.readBigUInt64BE(pos)
+                attr[field.property] = new Date(Number(timestamp) * 1000)
                 pos = pos + 8
                 break
             }
             default: {
-                attr[field.property] = data.readBigInt64BE(pos)
+                attr[field.property] = data.readBigUInt64BE(pos)
                 pos = pos + ProtocolConstants.LENGTH_BYTES
                 break
             }
         }
-    })   
+    })
     return [attr as T, pos]
 }
 
@@ -120,11 +120,11 @@ const STORAGE_GROUP_STAT_FILEDS: Array<Field> = [
 
 
 const STORAGE_SERVER_STAT_FILEDS: Array<Field> = [
-    field('byte',                   FastDfsTypes.ONE_BYTE),
+    field('status',                 FastDfsTypes.ONE_BYTE),
     field('id',                     FastDfsTypes.STORAGE_ID),
-    field('ipAddr',                 FastDfsTypes.STRING, ProtocolConstants.IP_ADDR_BYTES),
+    field('ipAddr',                 FastDfsTypes.STRING, ProtocolConstants.IP_ADDR_BYTES + 1),
     field('domainName',             FastDfsTypes.STRING, ProtocolConstants.DOMAIN_NAME_MAX_BYTES),
-    field('srcIpAddr',              FastDfsTypes.STRING, ProtocolConstants.IP_ADDR_BYTES),
+    field('srcIpAddr',              FastDfsTypes.STRING, ProtocolConstants.IP_ADDR_BYTES + 1),
     field('version',                FastDfsTypes.STRING, ProtocolConstants.VERSION_SIZE),
     field('joinTime',               FastDfsTypes.DATE),
     field('upTime',                 FastDfsTypes.DATE),

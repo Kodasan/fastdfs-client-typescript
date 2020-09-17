@@ -43,7 +43,7 @@ test('download an file to buffer', async () => {
 
 
 
-test('StreamRedirector test',  done => {
+test('redirect download stream test',  done => {
     const savePath = '/root/target'
     const client = new StorageClient(connOpts, storageServer)
     client.downloadToStream({
