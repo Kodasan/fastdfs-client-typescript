@@ -5,7 +5,7 @@ let connOpts = {
     port: 22122
 }
 
-const STORAGE_SERVER_IP  = 'your storage server ip address'
+const STORAGE_SERVER_IP  = '172.18.228.74'
 const FILE_PATH          = 'M00/00/00/rBLkSl9iFB-AE1gFAAAn1mYFCok16_big.conf'
 const GROUP_NAME         = 'group1'
 const STORE_PATH         = 0

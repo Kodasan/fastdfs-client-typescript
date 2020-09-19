@@ -215,7 +215,7 @@ export class TrackerClient extends TaskQueue {
 
     public abort() {
         this.conn.close()
-        this._reject(new Error('client already closed'))
+        this._reject(new Error('client has been abort'))
     }
     
     private _init(conn: FastDfsConnection) {

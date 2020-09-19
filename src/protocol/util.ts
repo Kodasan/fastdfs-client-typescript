@@ -34,6 +34,12 @@ export function buffToNumber(buffer: Buffer, offset: number): number {
             | buffer.readUInt8(offset + 7);
 }
 
+export function numToBuffer(num: number): Buffer {
+    let buffer = Buffer.alloc(ProtocolConstants.LENGTH_BYTES)
+    buffer.writeBigInt64BE(BigInt(num))
+    return buffer
+}
+
 export function replaceEndStr(str: string): string {
     let i = str.indexOf('\u0000')
     if ( i < 0) {

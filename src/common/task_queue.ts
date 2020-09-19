@@ -72,17 +72,16 @@ export abstract class TaskQueue {
 
     protected _rejectAllTask(): this {
         let fatalError = this.fatalError
-        if (this.execute != null) {
+        if (this.execute != null && this.execute.response != null) {
             process.nextTick(() => this.execute.response(fatalError))
         }
         // reject all tasks
         let rejectedTask = this.tasks
-        this.tasks       = []
+        // help release memory
+        this.tasks       = null
         rejectedTask.forEach(task => {
             process.nextTick(() => task.response(fatalError))
         })
-
-        rejectedTask    = null
         return this
     }
 

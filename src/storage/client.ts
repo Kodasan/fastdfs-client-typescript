@@ -6,7 +6,7 @@ import * as net              from "net"
 import { UploadTask }        from "./upload_task"
 import { ProtocolConstants } from "../protocol/constants"
 import { StorageCmd }        from "../protocol/storage_cmd"
-import * as parser           from "../protocol/util"
+import * as util             from "../protocol/util"
 import { StorageServer }     from "../protocol/storage_server"
 import { UploadResult }      from "./upload_result"
 import { UploadBuffer }      from "./upload_buffer"
@@ -15,7 +15,10 @@ import { UploadStream }      from "./upload_stream"
 import { Readable }          from "stream"
 import { StreamRedirector }  from "../io/handlers/stream_redirector"
 import { DownloadTask }      from "./download_task"
-import { ReadableFile } from "./readabl_file"
+import { ReadableFile }      from "./readabl_file"
+import { AppendTask }        from "./append_task"
+import { AppendResult }      from "./append_result"
+import { ModfiyTask }        from "./modify_task"
 
 /**
  * @description storage client of fastdfs
@@ -75,10 +78,10 @@ export class StorageClient extends TaskQueue {
                     let bodyLength = 1 + ProtocolConstants.LENGTH_BYTES 
                                        + ProtocolConstants.EXT_NAME_BYTES 
                                        + uploadTask.fileSize
-                    let header = parser.packHeader(bodyLength, 0, StorageCmd.UPLOAD_FILE)
+                    let header = util.packHeader(bodyLength, 0, StorageCmd.UPLOAD_FILE)
                     let sizeBytes = Buffer.alloc(1 + ProtocolConstants.LENGTH_BYTES)
                     sizeBytes.writeUInt8(this.server.storePath, 0)
-                    parser.numberToBuff(uploadTask.fileSize, sizeBytes, 1)
+                    util.numberToBuff(uploadTask.fileSize, sizeBytes, 1)
                     let out = this.conn._out()
                     out.write(header)
                     out.write(sizeBytes)
@@ -94,7 +97,7 @@ export class StorageClient extends TaskQueue {
                         reject(new Error(`Error code:${header.status}`))
                         return
                     }
-                    let groupName = parser.replaceEndStr(data.toString('utf-8', 0, ProtocolConstants.GROUP_NAME_MAX_BYTES))
+                    let groupName = util.replaceEndStr(data.toString('utf-8', 0, ProtocolConstants.GROUP_NAME_MAX_BYTES))
                     let filename = data.toString('utf-8', ProtocolConstants.GROUP_NAME_MAX_BYTES)
                     resolve({groupName, filename})
                 }
@@ -136,16 +139,170 @@ export class StorageClient extends TaskQueue {
         })
     }
 
+    public append(filename: string,  data: Buffer): Promise<boolean> {
+        return this.doAppend({
+            filename,
+            appendSize: data.length,
+            dataSource: new UploadBuffer(data)
+        })
+    }
+    
+
+    public modify(filename: string, offset: number, data: Buffer): Promise<boolean> {
+        return this.doModify({
+            filename,
+            offset,
+            modifySize: data.length,
+            dataSource: new UploadBuffer(data)
+        })
+    }
+
+    public doAppend(task: AppendTask): Promise<boolean> {
+        return new Promise<boolean>((resolve, reject) => {
+            this._submit({
+                request: () => {
+                    let nameBytes = Buffer.from(task.filename)
+                    let len       = nameBytes.length 
+                                  + ProtocolConstants.LENGTH_BYTES * 2  
+                                  + task.appendSize
+                    let header    = util.packHeader(len, 0, StorageCmd.APPEND_FILE)
+                    let nameLen   = Buffer.alloc(ProtocolConstants.LENGTH_BYTES)
+                    let dataLen   = Buffer.alloc(ProtocolConstants.LENGTH_BYTES)
+                    util.numberToBuff(nameBytes.length, nameLen, 0)
+                    util.numberToBuff(task.appendSize,  dataLen, 0)
+                    let pkg       = Buffer.concat([
+                                        header,
+                                        nameLen,
+                                        dataLen,
+                                        nameBytes
+                                    ]) 
+                    let _out = this.conn._out()
+                    _out.write(pkg)
+                    task.dataSource.invoke(_out)
+                },
+                response: (err, header, payload) => {
+                    if (err) {
+                        reject(err)
+                        return
+                    }
+                    if (header.status != 0) {
+                        reject(new Error(`Error code ${header.status}`))
+                        return
+                    }
+                    resolve(true)
+                }
+            })
+        })
+    }
+
+    public delete(filename: string, groupName: string): Promise<boolean> {
+        if (!groupName) {
+            return Promise.reject(new Error('group name must be secified'))
+        }
+        return new Promise<boolean>((resolve, reject) => {
+            this._submit({
+                request: () => {
+                    let nameBytes      = Buffer.from(filename)
+                    let groupNameBytes = Buffer.alloc(ProtocolConstants.GROUP_NAME_MAX_BYTES)
+                    groupNameBytes.write(groupName)
+                    let pkgLen         = groupNameBytes.length + nameBytes.length
+                    
+                    const pkg = Buffer.concat([
+                        util.packHeader(pkgLen, 0, StorageCmd.DELETE_FILE),
+                        groupNameBytes,
+                        nameBytes
+                    ])
+                    this.conn._out().write(pkg)
+                },
+                response: (err, header, payload) => {
+                    if (err) {
+                        reject(err)
+                        return
+                    }
+                    if (header.status != 0) {
+                        reject(new Error(`Error code ${header.status}`))
+                        return
+                    }
+                    resolve(true)
+                }
+            })
+        })
+    }
+
+    public doModify(task: ModfiyTask): Promise<boolean> {
+        return new Promise<boolean>((resolve, reject) => {
+            this._submit({
+                request: () => {
+                    let nameBytes = Buffer.from(task.filename)
+                    let pkgLen    = 3 * ProtocolConstants.LENGTH_BYTES 
+                                  + nameBytes.length
+                                  + task.modifySize
+                    let pkg       =  Buffer.concat([
+                                        util.packHeader(pkgLen, 0, StorageCmd.MODIFY_FILE),
+                                        util.numToBuffer(nameBytes.length),
+                                        util.numToBuffer(task.offset),
+                                        util.numToBuffer(task.modifySize),
+                                        nameBytes
+                                    ])
+                    let _out = this.conn._out()
+                    _out.write(pkg)
+                    task.dataSource.invoke(_out)
+                },
+                response: (err, header) => { 
+                    if (err) {
+                        reject(err)
+                        return
+                    }
+                    if (header.status != 0) {
+                        reject(new Error(`Error code ${header.status}`))
+                        return
+                    }
+                    resolve(true)
+                }
+            })
+        })
+    }
+
+    public truncate(filename: string, trucncatedFileSize: number): Promise<boolean> {
+        return new Promise<boolean>((resolve, reject) => {
+            this._submit({
+                request: () => {
+                    let nameBytes      = Buffer.from(filename)
+                    let pkgLen         = 2 * ProtocolConstants.LENGTH_BYTES + nameBytes.length
+                    let pkg            = Buffer.concat([
+                                            util.packHeader(pkgLen, 0, StorageCmd.TRUNCATE_FILE),
+                                            util.numToBuffer(nameBytes.length),
+                                            util.numToBuffer(trucncatedFileSize),
+                                            nameBytes
+                                         ])
+                    this.conn._out().write(pkg)
+                },
+                response: (err, header, payload) => {
+                    if (err) {
+                        reject(err)
+                        return
+                    }
+                    if (header.status != 0) {
+                        reject(new Error(`Error code ${header.status}`))
+                        return
+                    }
+                    resolve(true)
+                }
+            })
+        })
+    }
+
+
     private _sendDownloadCmd(groupName:string, filename:string, offset:number, byteAmount: number) {
         let filenameBytes = Buffer.from(filename)
         let groupNameBytes = Buffer.alloc(ProtocolConstants.GROUP_NAME_MAX_BYTES, 0)
         groupNameBytes.write(groupName, 'utf-8')
         let offsetBytes = Buffer.alloc(8)
-        parser.numberToBuff(offset, offsetBytes, 0)
+        util.numberToBuff(offset, offsetBytes, 0)
         let byteAmountBytes = Buffer.alloc(8)
-        parser.numberToBuff(byteAmount, byteAmountBytes, 0)
+        util.numberToBuff(byteAmount, byteAmountBytes, 0)
         let bodyLength = ProtocolConstants.GROUP_NAME_MAX_BYTES + filenameBytes.length + byteAmountBytes.length + offsetBytes.length
-        let header = parser.packHeader(bodyLength, 0, StorageCmd.DOWNLOAD_FILE)
+        let header = util.packHeader(bodyLength, 0, StorageCmd.DOWNLOAD_FILE)
         let payload = Buffer.concat([header, offsetBytes, byteAmountBytes, groupNameBytes, filenameBytes])
         this.conn._out().write(payload)
     }
@@ -161,7 +318,7 @@ export class StorageClient extends TaskQueue {
 
     public abort() {
         this.conn.close()
-        this._reject(new Error('client already closed'))
+        this._reject(new Error('client has been abort'))
     }
 
     private _init(conn: FastDfsConnection) {

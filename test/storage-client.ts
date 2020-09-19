@@ -62,3 +62,15 @@ test('redirect download stream test',  done => {
         client.close()
     })
 })
+
+test('delete an file', async () => {
+
+})
+
+test('modify an file', async () => {
+
+})
+
+test('append an file', async () => {
+    
+})
