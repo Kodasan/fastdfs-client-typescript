@@ -38,7 +38,7 @@ export class StreamRedirector extends EventHandler {
             readPos         = ProtocolConstants.HEADER_BYTES
             this.remaining  = this.header.length
         }
-        let chunk      = data.slice(readPos, this.remaining)
+        const chunk      = data.slice(readPos, this.remaining + readPos)
         this.remaining = this.remaining - chunk.length
         if (chunk.length > 0) {
             this.redirect(chunk)
@@ -47,9 +47,11 @@ export class StreamRedirector extends EventHandler {
         if (this.remaining == 0) { 
             this.redirect(null)
             this.removeSelf(ctx)
+            this.header    = null
+            this.remaining = 0
         }
 
-        return this.interceptData
+        return !this.interceptData
     }
 
     public error(ctx: EventHandlerContext, error: Error): boolean {
@@ -57,7 +59,7 @@ export class StreamRedirector extends EventHandler {
             let _in = this.inputStream
             process.nextTick(() => _in.emit('error', error))
         }
-        return this.interceptData
+        return true
     }
 
     protected redirect(chunk: Buffer): this {

@@ -45,12 +45,17 @@ export class FastDfsConnection extends EventEmitter {
 
     private configureSocket() {
         this.socket.setNoDelay(true)
-
+        this.socket.on('close',   (hasError) => {
+            if (hasError) {
+                // the error eventlisntener will handle it
+                return
+            }
+            this.ctx.fireError(new Error('the connection is closed'))
+        })
         this.socket.on('connect', ()     => this.emit('connect'))
         this.socket.on('data',    (data) => this.ctx.fireRead(data))
         this.socket.on('error',   (err)  => { 
             process.nextTick(() => this.ctx.fireError(err)) 
-            this.emit('error',  err)
         })
     }
 }

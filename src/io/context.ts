@@ -26,9 +26,11 @@ export class EventHandlerContext {
         let len = this.handlers.length
         try {
            while (idx < len) {
-               if (!this.handlers[idx].connect(this)) {
+               const handler = this.handlers[idx]
+               if (handler && !handler.connect(this)) {
                    break
                }
+               idx++
            }
         } catch (err) {
             this.fireError(err)
@@ -41,9 +43,11 @@ export class EventHandlerContext {
         let len = this.handlers.length
         try {
             while (idx < len) {
-                if (!this.handlers[idx].read(this, data)) {
+                const handler = this.handlers[idx]
+                if (handler && !handler.read(this, data)) {
                     break
                 }
+                idx++
             }
         } catch(err) {
             this.fireError(err)
@@ -56,10 +60,12 @@ export class EventHandlerContext {
         let len = this.handlers.length
         try {
            while (idx < len) {
-               if (!this.handlers[idx].error(this, err)) {
+               const handler = this.handlers[idx]
+               if (handler && handler.error(this, err)) {
                    break
                }
-           } 
+               idx++
+           }
         } catch(err) {
             //...
         }

@@ -36,7 +36,7 @@ export function buffToNumber(buffer: Buffer, offset: number): number {
 
 export function numToBuffer(num: number): Buffer {
     let buffer = Buffer.alloc(ProtocolConstants.LENGTH_BYTES)
-    buffer.writeBigInt64BE(BigInt(num))
+    buffer.writeBigUInt64BE(BigInt(num))
     return buffer
 }
 

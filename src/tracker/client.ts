@@ -1,8 +1,5 @@
-import { TaskQueue }                from "../common/task_queue"
 import * as net                     from "net"
 import { FastDfsConnection }        from "../io/connection"
-import { FrameDecoder }             from "../io/handlers/frame_decoder"
-import { Header }                   from "../protocol/header"
 import { StorageServer }            from "../protocol/storage_server"
 import { TrackerCmd }               from "../protocol/tracker_cmd"
 import { ProtocolConstants }        from "../protocol/constants"
@@ -10,18 +7,15 @@ import { buffToNumber, packHeader } from "../protocol/util"
 import { StorageServerStat }        from "../protocol/storage_server_stat"
 import * as parser                  from "../protocol/parser"
 import { StorageGroupStat }         from "../protocol/storage_group_stat"
+import { AbstractClient }           from "../common/abstract_client"
 /**
  * @description tracker client
  * @author      kesanzz
  */
-export class TrackerClient extends TaskQueue {
-
-    private conn: FastDfsConnection
+export class TrackerClient extends AbstractClient {
 
     constructor(arg: FastDfsConnection | net.TcpNetConnectOpts) {
-        super()
-        let conn = arg instanceof FastDfsConnection ? arg : new FastDfsConnection(arg)
-        this._init(conn)
+        super(arg)
     }
 
     public fetchStoreServer(): Promise<StorageServer> {
@@ -202,46 +196,6 @@ export class TrackerClient extends TaskQueue {
         this.conn._out().write(header)
         if (groupNameBytes != null) this.conn._out().write(groupNameBytes)
         if (pathBytes != null)      this.conn._out().write(pathBytes)
-    }
-
-    public close() {
-        // the last task is to close the connection
-        let conn = this.conn
-        this._submit({
-            request: () => conn.close()
-        })
-        this._closeTaskQueue()
-    }
-
-    public abort() {
-        this.conn.close()
-        this._reject(new Error('client has been abort'))
-    }
-    
-    private _init(conn: FastDfsConnection) {
-        this.conn = conn
-        this.conn.connect(() => this._connected())
-        this.conn.on('close', (args) => this._closed(args)) 
-        this.conn.on('error', (err)  => this._fatalError(err))
-    }
-
-    protected _closed(err: Error) {
-        this._reject(err)
-    }
-
-    protected _fatalError(err: Error) {
-        this._reject(err)
-    }
-
-    protected _connected() {
-        let ctx = this.conn.context()
-        // add handler
-        let frameDecoder = new FrameDecoder((err: Error, header: Header, data: Buffer) => {
-            this._response(err, header, data)
-        })
-        ctx.addHandler(frameDecoder)
-        // trigger to invoke next task
-        this._activeTaskQueue()
     }
 
 

@@ -1,7 +1,4 @@
-import { TaskQueue }         from "../common/task_queue"
 import { FastDfsConnection } from "../io/connection"
-import { FrameDecoder }      from "../io/handlers/frame_decoder"
-import { Header }            from "../protocol/header"
 import * as net              from "net"
 import { UploadTask }        from "./upload_task"
 import { ProtocolConstants } from "../protocol/constants"
@@ -17,28 +14,25 @@ import { StreamRedirector }  from "../io/handlers/stream_redirector"
 import { DownloadTask }      from "./download_task"
 import { ReadableFile }      from "./readabl_file"
 import { AppendTask }        from "./append_task"
-import { AppendResult }      from "./append_result"
 import { ModfiyTask }        from "./modify_task"
+import { AbstractClient }    from "../common/abstract_client"
 
 /**
  * @description storage client of fastdfs
  * @author      kesanzz
  */
-export class StorageClient extends TaskQueue {
+export class StorageClient extends AbstractClient {
     
-    private conn: FastDfsConnection
-
     private server: StorageServer
 
     constructor(arg: FastDfsConnection | net.TcpNetConnectOpts, config: StorageServer){
-        super()
-        let conn = arg instanceof FastDfsConnection ? arg : new FastDfsConnection(arg)
+        super(arg)
         this.server = config
-        this._init(conn)
     }
 
     public uploadData(data:Buffer, extName?: string): Promise<UploadResult> {
         return this.doUpload({
+            cmd: StorageCmd.UPLOAD_FILE,
             fileExtName: extName,
             fileSize: data.length,
             dataSource: new UploadBuffer(data)
@@ -46,24 +40,55 @@ export class StorageClient extends TaskQueue {
     }
 
     public uploadFile(path: string, extName?: string): Promise<UploadResult> {
-        let fileStat = fs.statSync(path)
-        if (!fileStat.isFile()) {
-            return Promise.reject(new Error(`${path} not a file`)) 
-        }
-        let fileSize = fileStat.size
-        let fileExtName = extName ? extName : path.substring(path.lastIndexOf('.') + 1)
-        return this.doUpload({
-            fileSize,
-            fileExtName,
-            dataSource: new UploadStream(fs.createReadStream(path))
-        })
+        return this.doUploadFile(StorageCmd.UPLOAD_FILE, path, extName)
     }
 
-    public uploadStream(inStream: Readable, dataSize: number, autoClose?: boolean,extName?: string): Promise<UploadResult> {
+    public uploadStream(inStream: Readable, dataSize: number, autoClose?: boolean, extName?: string): Promise<UploadResult> {
         return this.doUpload({
+            cmd: StorageCmd.UPLOAD_FILE,
             fileSize: dataSize,
             fileExtName: extName,
             dataSource: new UploadStream(inStream, autoClose)
+        })
+    }
+
+    public uploadAppenderFile(path: string, extName?: string): Promise<UploadResult> {
+        return this.doUploadFile(StorageCmd.UPLOAD_APPENDER_FILE, path, extName)
+    }
+
+    public uploadAppenderData(data: Buffer, extName?: string) {
+        return this.doUpload({
+            cmd: StorageCmd.UPLOAD_APPENDER_FILE,
+            fileSize: data.length,
+            fileExtName: extName,
+            dataSource: new UploadBuffer(data)
+        })
+    }
+
+    public uploadAppenderStream(inStream: Readable, dataSize: number, autoClose?: boolean, extName?: string): Promise<UploadResult> {
+        return this.doUpload({
+            cmd: StorageCmd.UPLOAD_APPENDER_FILE,
+            fileSize: dataSize,
+            fileExtName: extName,
+            dataSource: new UploadStream(inStream, autoClose)
+        })
+    }
+
+    public doUploadFile(cmd: StorageCmd, path: string, extName?: string): Promise<UploadResult> {
+        let readStream: Readable = null
+        let fileSize: number     = 0
+        try {
+             readStream = fs.createReadStream(path)
+             fileSize   = fs.statSync(path).size
+        } catch (ex) {
+            return Promise.reject(ex)
+        }
+        const fileExtName = extName ? extName : path.substring(path.lastIndexOf('.') + 1)
+        return this.doUpload({
+            cmd,
+            fileExtName,
+            fileSize,
+            dataSource: new UploadStream(readStream)
         })
     }
 
@@ -78,7 +103,7 @@ export class StorageClient extends TaskQueue {
                     let bodyLength = 1 + ProtocolConstants.LENGTH_BYTES 
                                        + ProtocolConstants.EXT_NAME_BYTES 
                                        + uploadTask.fileSize
-                    let header = util.packHeader(bodyLength, 0, StorageCmd.UPLOAD_FILE)
+                    let header = util.packHeader(bodyLength, 0, uploadTask.cmd)
                     let sizeBytes = Buffer.alloc(1 + ProtocolConstants.LENGTH_BYTES)
                     sizeBytes.writeUInt8(this.server.storePath, 0)
                     util.numberToBuff(uploadTask.fileSize, sizeBytes, 1)
@@ -106,11 +131,11 @@ export class StorageClient extends TaskQueue {
     }
 
     public downloadToStream(task: DownloadTask): Readable {
-        let   readable            = new ReadableFile()
-        const removeAfterJobDone  = true
+        let   readable       = new ReadableFile()
+        const interceptData  = true
         this._submit({
             request: () => {
-                let redirector = new StreamRedirector(readable, removeAfterJobDone)
+                let redirector = new StreamRedirector(readable, interceptData)
                 this.conn.context().unshiftHandler(redirector)
                 this._sendDownloadCmd(task.groupName, task.filename, task.fileOffset, task.byteAmount)
             }
@@ -175,7 +200,7 @@ export class StorageClient extends TaskQueue {
                                         nameLen,
                                         dataLen,
                                         nameBytes
-                                    ]) 
+                                    ])
                     let _out = this.conn._out()
                     _out.write(pkg)
                     task.dataSource.invoke(_out)
@@ -233,7 +258,7 @@ export class StorageClient extends TaskQueue {
         return new Promise<boolean>((resolve, reject) => {
             this._submit({
                 request: () => {
-                    let nameBytes = Buffer.from(task.filename)
+                    let nameBytes = Buffer.from(task.filename, 'utf-8')
                     let pkgLen    = 3 * ProtocolConstants.LENGTH_BYTES 
                                   + nameBytes.length
                                   + task.modifySize
@@ -305,48 +330,6 @@ export class StorageClient extends TaskQueue {
         let header = util.packHeader(bodyLength, 0, StorageCmd.DOWNLOAD_FILE)
         let payload = Buffer.concat([header, offsetBytes, byteAmountBytes, groupNameBytes, filenameBytes])
         this.conn._out().write(payload)
-    }
-
-    public close() {
-        // the last task is to close the connection
-        let conn = this.conn
-        this._submit({
-            request: () => conn.close()
-        })
-        this._closeTaskQueue()
-    }
-
-    public abort() {
-        this.conn.close()
-        this._reject(new Error('client has been abort'))
-    }
-
-    private _init(conn: FastDfsConnection) {
-        this.conn = conn
-        this.conn.connect(() => this._connected())
-        this.conn.on('close', (args) => this._closed(args)) 
-        this.conn.on('error', (err)  => this._fatalError(err))
-    }
-
-    protected _closed(err: Error) {
-        this._reject(err)
-    }
-
-    protected _fatalError(err: Error) {
-        this._reject(err)
-    }
-
-    protected _connected() {
-        let ctx = this.conn.context()
-        // add handler
-        let frameDecoder = new FrameDecoder((err: Error, header: Header, data: Buffer) => {
-            this._response(err, header, data)
-        })
-        ctx.addHandler(frameDecoder)
-        // trigger to invoke next task
-        this._activeTaskQueue()
-    }
-
-    
+    }   
 
 }

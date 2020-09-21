@@ -14,16 +14,16 @@ export class FrameDecoder extends EventHandler {
     private data:       Buffer
     private writePos:   number
 
-    private cb: (err: Error, header: Header, responseBytes: Buffer) => void
+    private cb: (fatalError: boolean, err: Error, header?: Header, responseBytes?: Buffer) => void
 
-    constructor(cb?: (err: Error, header: Header, responseBytes: Buffer) => void) {
+    constructor(cb?: (fatalError: boolean, err: Error, header?: Header, responseBytes?: Buffer) => void) {
         super()
         if (cb) {
             this.cb = cb
         }
     }
 
-    public bind(cb: (err: Error, header: Header, responseBytes: Buffer) => void): this {
+    public bind(cb: (fatalError: boolean, err: Error, header?: Header, responseBytes?: Buffer) => void): this {
         this.cb = cb
         return this
     }
@@ -31,8 +31,8 @@ export class FrameDecoder extends EventHandler {
     public read(ctx: EventHandlerContext, buff: Buffer): boolean {
         if (this.header == null) {
             if (buff.length < ProtocolConstants.HEADER_BYTES) {
-                ctx.fireError(new Error(`Illegal packet, recv ${buff.length} bytes, but expect ${ProtocolConstants.HEADER_BYTES} bytes`))
-                return
+                this.invoke(new Error(`Illegal packet, recv ${buff.length} bytes, but expect ${ProtocolConstants.HEADER_BYTES} bytes`))
+                return false
             }
             this.header = recvHeader(buff)
             if (this.header.length > 0) {
@@ -52,7 +52,7 @@ export class FrameDecoder extends EventHandler {
                 this.header = null
                 this.invoke(null, header, null)
             }
-            return
+            return true
         }
         buff.copy(this.data, this.writePos, 0)
         this.writePos += buff.length
@@ -67,10 +67,15 @@ export class FrameDecoder extends EventHandler {
         return true
     }
 
-    private invoke(err: Error, header: Header, responseBytes: Buffer) {
+    private invoke(err: Error, header?: Header, responseBytes?: Buffer) {
         if (!this.cb) {
             return
         }
-        process.nextTick(() => this.cb(err, header, responseBytes))
+        process.nextTick(() => this.cb(false, err, header, responseBytes))
+    }
+
+    public error(ctx: EventHandlerContext, err: Error): boolean {
+        process.nextTick(() => this.cb(true, err))
+        return true
     }
 }

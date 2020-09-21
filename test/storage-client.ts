@@ -61,16 +61,52 @@ test('redirect download stream test',  done => {
         })
         client.close()
     })
+    .on('error', (err) => {
+        console.log(err)
+    })
 })
+const DELETE_FILE = 'M00/00/00/rBLkSl9oCZ2AX5QKAAAn1mYFCok13.conf'
 
 test('delete an file', async () => {
-
+    // file already delete
+    const client = new StorageClient(connOpts, storageServer)
+    try {
+        const res    = await client.delete(DELETE_FILE, groupName)
+    } catch(ex) {
+        expect(ex).not.toBeNull()
+    }
+    client.close()
 })
+
+const FILE_TO_MODIFY = 'M00/00/00/rBLkSl9oQTyEayp6AAAAAJmIxso430.bin'
 
 test('modify an file', async () => {
-
+    const client = new StorageClient(connOpts, storageServer)
+    const payload = Buffer.alloc(1)
+    for(let i = 0 ; i < 1; i++) {
+        payload[i] = i
+    }
+    const res    = await client.modify(FILE_TO_MODIFY, 10, payload)
+    expect(res).toBe(true)
+    client.close()
 })
 
+const FILE_TO_APPEND = 'M00/00/00/rBLkSl9oQTyEayp6AAAAAJmIxso430.bin'
+
 test('append an file', async () => {
-    
+    const client  = new StorageClient(connOpts, storageServer)
+    const payload = Buffer.alloc(1024)
+    payload.fill(0xFE)
+    const res = await client.append(FILE_TO_APPEND, payload)
+    expect(res).toBe(true)
+    client.close()
+})
+
+const FILE_TO_TRUNCATE = FILE_TO_APPEND
+
+test('truncate file', async () => {
+    const client = new StorageClient(connOpts, storageServer)
+    const res    = await client.truncate(FILE_TO_TRUNCATE, 10)
+    expect(res).toBe(true)
+    client.close()
 })

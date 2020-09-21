@@ -21,11 +21,19 @@ export abstract class TaskQueue {
     protected _submit(task: Task): this {
         if (this.state == TaskQueueState.REJECT) {
             let fatalError = this.fatalError
-            process.nextTick(() => task.response(fatalError))          
+            process.nextTick(() => {
+                if (task.response) {
+                    task.response(fatalError)
+                }
+            })          
             return this
         }
         if (this.state == TaskQueueState.CLOSED) {
-            process.nextTick(() => task.response(new Error('client already closed')))
+            process.nextTick(() => { 
+                if (task.response) {
+                    task.response(new Error('client already closed'))
+                }
+            })
             return this
         }
         if (this.state == TaskQueueState.WAITING) {
